@@ -1,22 +1,22 @@
-import keras
 import numpy as np
-import tensorflow as tf
-from keras.layers import Input, Lambda, Dense
-from keras.layers.merge import _Merge
+from keras.layers import Input, Lambda, Dense, Conv1D
 from keras.layers.normalization import BatchNormalization
 from keras.models import Model
-import read
+import keras
 import sys
+import tensorflow as tf
+from keras.layers.merge import _Merge
+import read
 
 np.random.seed(1)
 tf.set_random_seed(2)
 
-batch_size = 60
 samples_per_class = 5
-classes_per_set = 9
-feature_length = read.dct_length * 3 * len(read.imus)
-train_size = 500
+classes_per_set = 8
+feature_length = read.dct_length * 3 * 3
+batch_size = 60
 epochs = 10
+train_size = 500
 
 
 class MatchCosine(_Merge):
@@ -27,9 +27,7 @@ class MatchCosine(_Merge):
         self.n_samp = n_samp
 
     def build(self, input_shape):
-        if not isinstance(input_shape, list) or len(input_shape) != self.nway * self.n_samp + 2:
-            raise ValueError(
-                'A ModelCosine layer should be called on a list of inputs of length %d' % (self.nway * self.n_samp + 2))
+        print('here')
 
     def call(self, inputs):
         self.nway = (len(inputs) - 2) / self.n_samp
@@ -124,7 +122,6 @@ def create_train_instances(train_sets):
     support_X = None
     support_y = None
     target_y = None
-
     for user_id, train_feats in train_sets.items():
         _support_X, _support_y, _target_y = packslice(train_feats)
 
@@ -203,34 +200,35 @@ def create_test_instance(test_set, support_set):
     return [support_X, support_y, target_y]
 
 
-def split(_data, _test_ids):
-    train_data_ = {key: value for key, value in _data.items() if key not in _test_ids}
-    test_data_ = {key: value for key, value in _data.items() if key in _test_ids}
-    return train_data_, test_data_
-
-
-def get_hold_out_users(users):
-    indices = np.random.choice(len(users), int(len(users) / 3), False)
-    test_users = [u for indd, u in enumerate(users) if indd in indices]
-    return test_users
-
-
 def mlp_embedding(x):
     x = Dense(1200, activation='relu')(x)
     x = BatchNormalization()(x)
     return x
 
 
+def conv_embedding(x):
+    x = Conv1D(1200, activation='relu')(x)
+    x = BatchNormalization()(x)
+    return x
+
+
+def split(_data, _test_ids):
+    train_data_ = {key: value for key, value in _data.items() if key not in _test_ids}
+    test_data_ = {key: value for key, value in _data.items() if key in _test_ids}
+    return train_data_, test_data_
+
+
 feature_data = read.read()
 
 test_ids = list(feature_data.keys())
+print(test_ids)
 test_id = [test_ids[sys.argv[1]]]
 
-_train_data, _test_data = split(feature_data, test_id)
-train_data = create_train_instances(_train_data)
+_train_features, _test_features = split(feature_data, test_id)
+train_data = create_train_instances(_train_features)
 
-test_support_set, _test_data = support_set_split(_test_data)
-test_data = create_test_instance(_test_data, test_support_set)
+test_support_set, _test_features = support_set_split(_test_features)
+test_data = create_test_instance(_test_features, test_support_set)
 
 numsupportset = samples_per_class * classes_per_set
 input1 = Input((numsupportset + 1, feature_length))
@@ -250,7 +248,8 @@ model.fit([train_data[0], train_data[1]], train_data[2], epochs=epochs, batch_si
 score = model.evaluate([test_data[0], test_data[1]], test_data[2], batch_size=batch_size, verbose=1)
 
 print(score)
-read.write_data('window_length:'+str(read.window_length)+','+'dct_length:'+str(read.dct_length)+','+'increment_ratio:'+
-                str(read.increment_ratio)+','+'classes_per_set:'+str(classes_per_set)+','+'samples_per_class:'+
-                str(samples_per_class)+','+'train_size:'+str(train_size)+','+'batch_size:'+str(batch_size)+','+
-                'epochs:'+str(epochs)+','+'test_id:'+str(test_id[0])+','+'score:'+','.join([str(f) for f in score]))
+read.write_data('mlp architecture' + ',' + 'window_length:' + str(read.window_length) + ',' + 'dct_length:' + str(
+    read.dct_length) + ',' + 'increment_ratio:' + str(read.increment_ratio) + ',' + 'classes_per_set:' + str(
+    classes_per_set) + ',' + 'samples_per_class:' +str(samples_per_class) + ',' + 'train_size:' + str(
+    train_size) + ',' + 'batch_size:' + str(batch_size) + ',' + 'epochs:' + str(epochs) + ',' + 'test_id:' + str(
+    test_id[0]) + ',' + 'score:' + ','.join([str(f) for f in score]))

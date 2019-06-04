@@ -1,22 +1,22 @@
+import keras
 import numpy as np
-from keras.layers import Input, Lambda, Dense
+import tensorflow as tf
+from keras.layers import Input, Lambda, Dense, Conv1D, MaxPooling1D, Flatten
+from keras.layers.merge import _Merge
 from keras.layers.normalization import BatchNormalization
 from keras.models import Model
-import keras
-import sys
-import tensorflow as tf
-from keras.layers.merge import _Merge
 import read
+import sys
 
 np.random.seed(1)
 tf.set_random_seed(2)
 
-samples_per_class = 5
-classes_per_set = 8
-feature_length = read.dct_length * 3 * 3
 batch_size = 60
-epochs = 10
+samples_per_class = 5
+classes_per_set = 9
+feature_length = read.dct_length * 3 * len(read.imus)
 train_size = 500
+epochs = 10
 
 
 class MatchCosine(_Merge):
@@ -27,7 +27,9 @@ class MatchCosine(_Merge):
         self.n_samp = n_samp
 
     def build(self, input_shape):
-        print('here')
+        if not isinstance(input_shape, list) or len(input_shape) != self.nway * self.n_samp + 2:
+            raise ValueError(
+                'A ModelCosine layer should be called on a list of inputs of length %d' % (self.nway * self.n_samp + 2))
 
     def call(self, inputs):
         self.nway = (len(inputs) - 2) / self.n_samp
@@ -86,7 +88,7 @@ def packslice(data_set):
     target_cacheY = []
 
     for iiii in range(train_size):
-        slice_x = np.zeros((n_samples + 1, feature_length))
+        slice_x = np.zeros((n_samples + 1, feature_length, 1))
         slice_y = np.zeros((n_samples,))
 
         ind = 0
@@ -97,10 +99,13 @@ def packslice(data_set):
 
         for j, cur_class in enumerate(classes):
             data_pack = data_set[cur_class]
+            data_pack = np.array(data_pack)
+            data_pack = np.expand_dims(data_pack, 3)
+
             example_inds = np.random.choice(len(data_pack), samples_per_class, False)
 
             for eind in example_inds:
-                slice_x[pinds[ind], :] = data_pack[eind]
+                slice_x[pinds[ind], :, :] = data_pack[eind]
                 slice_y[pinds[ind]] = cur_class
                 ind += 1
 
@@ -108,7 +113,7 @@ def packslice(data_set):
                 target_indx = np.random.choice(len(data_pack))
                 while target_indx in example_inds:
                     target_indx = np.random.choice(len(data_pack))
-                slice_x[n_samples, :] = data_pack[target_indx]
+                slice_x[n_samples, :, :] = data_pack[target_indx]
                 target_y = cur_class
 
         support_cacheX.append(slice_x)
@@ -122,6 +127,7 @@ def create_train_instances(train_sets):
     support_X = None
     support_y = None
     target_y = None
+
     for user_id, train_feats in train_sets.items():
         _support_X, _support_y, _target_y = packslice(train_feats)
 
@@ -147,22 +153,26 @@ def packslice_test(data_set, support_set):
     support_cacheY = []
     target_cacheY = []
 
-    support_X = np.zeros((n_samples, feature_length))
+    support_X = np.zeros((n_samples, feature_length, 1))
     support_y = np.zeros((n_samples,))
     for i, _class in enumerate(support_set.keys()):
         X = support_set[_class]
+        X = np.array(X)
+        X = np.expand_dims(X, 3)
         for j in range(len(X)):
-            support_X[(i * samples_per_class) + j, :] = X[j]
+            support_X[(i * samples_per_class) + j, :, :] = X[j]
             support_y[(i * samples_per_class) + j] = _class
 
     for _class in data_set:
         X = data_set[_class]
+        X = np.array(X)
+        X = np.expand_dims(X, 3)
         for iiii in range(len(X)):
-            slice_x = np.zeros((n_samples + 1, feature_length))
+            slice_x = np.zeros((n_samples + 1, feature_length, 1))
             slice_y = np.zeros((n_samples,))
 
-            slice_x[:n_samples, :] = support_X[:]
-            slice_x[n_samples, :] = X[iiii]
+            slice_x[:n_samples, :, :] = support_X[:]
+            slice_x[n_samples, :, :] = X[iiii]
 
             slice_y[:n_samples] = support_y[:]
 
@@ -200,37 +210,44 @@ def create_test_instance(test_set, support_set):
     return [support_X, support_y, target_y]
 
 
-def mlp_embedding(x):
-    x = Dense(1200, activation='relu')(x)
-    x = BatchNormalization()(x)
-    return x
-
-
 def split(_data, _test_ids):
     train_data_ = {key: value for key, value in _data.items() if key not in _test_ids}
     test_data_ = {key: value for key, value in _data.items() if key in _test_ids}
     return train_data_, test_data_
 
 
+def get_hold_out_users(users):
+    indices = np.random.choice(len(users), int(len(users) / 3), False)
+    test_users = [u for indd, u in enumerate(users) if indd in indices]
+    return test_users
+
+
+def conv_embedding(x):
+    x = Conv1D(12, kernel_size=3, activation='relu')(x)
+    x = MaxPooling1D(pool_size=2)(x)
+    x = BatchNormalization()(x)
+    x = Flatten()(x)
+    return x
+
+
 feature_data = read.read()
 
 test_ids = list(feature_data.keys())
-print(test_ids)
 test_id = [test_ids[sys.argv[1]]]
 
-_train_features, _test_features = split(feature_data, test_id)
-train_data = create_train_instances(_train_features)
+_train_data, _test_data = split(feature_data, test_id)
+train_data = create_train_instances(_train_data)
 
-test_support_set, _test_features = support_set_split(_test_features)
-test_data = create_test_instance(_test_features, test_support_set)
+test_support_set, _test_data = support_set_split(_test_data)
+test_data = create_test_instance(_test_data, test_support_set)
 
 numsupportset = samples_per_class * classes_per_set
-input1 = Input((numsupportset + 1, feature_length))
+input1 = Input((numsupportset + 1, feature_length, 1))
 
 modelinputs = []
 for lidx in range(numsupportset):
-    modelinputs.append(mlp_embedding(Lambda(lambda x: x[:, lidx, :])(input1)))
-targetembedding = mlp_embedding(Lambda(lambda x: x[:, -1, :])(input1))
+    modelinputs.append(conv_embedding(Lambda(lambda x: x[:, lidx, :, :])(input1)))
+targetembedding = conv_embedding(Lambda(lambda x: x[:, -1, :, :])(input1))
 modelinputs.append(targetembedding)
 supportlabels = Input((numsupportset, classes_per_set))
 modelinputs.append(supportlabels)
@@ -242,7 +259,8 @@ model.fit([train_data[0], train_data[1]], train_data[2], epochs=epochs, batch_si
 score = model.evaluate([test_data[0], test_data[1]], test_data[2], batch_size=batch_size, verbose=1)
 
 print(score)
-read.write_data('window_length:'+str(read.window_length)+','+'dct_length:'+str(read.dct_length)+','+'increment_ratio:'+
-                str(read.increment_ratio)+','+'classes_per_set:'+str(classes_per_set)+','+'samples_per_class:'+
-                str(samples_per_class)+','+'train_size:'+str(train_size)+','+'batch_size:'+str(batch_size)+','+
-                'epochs:'+str(epochs)+','+'test_id:'+str(test_id[0])+','+'score:'+','.join([str(f) for f in score]))
+read.write_data('conv architecture' + ',' + 'window_length:' + str(read.window_length) + ',' + 'dct_length:' + str(
+    read.dct_length) + ',' + 'increment_ratio:' + str(read.increment_ratio) + ',' + 'classes_per_set:' + str(
+    classes_per_set) + ',' + 'samples_per_class:' + str(samples_per_class) + ',' + 'train_size:' + str(
+    train_size) + ',' + 'batch_size:' + str(batch_size) + ',' + 'epochs:' + str(epochs) + ',' + 'test_id:' + str(
+    test_id[0]) + ',' + 'score:' + ','.join([str(f) for f in score]))
