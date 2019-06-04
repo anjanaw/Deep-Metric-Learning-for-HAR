@@ -11,12 +11,13 @@ import sys
 np.random.seed(1)
 tf.set_random_seed(2)
 
-batch_size = 120
+batch_size = 60
 samples_per_class = 5
 classes_per_set = 9
 feature_length = read.dct_length * 3 * len(read.imus)
 train_size = 500
 epochs = 10
+
 
 class MatchCosine(_Merge):
     def __init__(self, nway=5, n_samp=1, **kwargs):
@@ -223,7 +224,7 @@ def mlp_embedding(x):
 feature_data = read.read()
 
 test_ids = list(feature_data.keys())
-test_id = [test_ids[0]]#[sys.argv[1]]]
+test_id = [test_ids[sys.argv[1]]]
 
 _train_data, _test_data = split(feature_data, test_id)
 train_data = create_train_instances(_train_data)
@@ -253,3 +254,7 @@ model.compile(optimizer='adam', loss='categorical_crossentropy', metrics=['accur
 model.fit([train_data[0], train_data[1]], train_data[2], epochs=epochs, batch_size=batch_size, verbose=1)
 score = model.evaluate([test_data[0], test_data[1]], test_data[2], batch_size=batch_size, verbose=1)
 print(score)
+read.write_data('window_length:'+str(read.window_length)+','+'dct_length:'+str(read.dct_length)+','+'increment_ratio:'+
+                str(read.increment_ratio)+','+'classes_per_set:'+str(classes_per_set)+','+'samples_per_class:'+
+                str(samples_per_class)+','+'train_size:'+str(train_size)+','+'batch_size:'+str(batch_size)+','+
+                'epochs:'+str(epochs)+','+'test_id:'+str(test_id[0])+','+'score:'+','.join([str(f) for f in score]))

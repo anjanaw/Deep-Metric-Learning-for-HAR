@@ -9,12 +9,24 @@ tf.set_random_seed(2)
 
 window_length = 500
 dct_length = 60
+increment_ratio = 1
 data_path = '/Users/anjanawijekoon/Data/SELFBACK/activity_data_34/merge/'
+results_path = 'results.csv'
 imus = [1, 2]
 
 classes = ["jogging", "sitting", "standing", "walkfast", "walkmod", "walkslow", "upstairs", "downstairs", "lying"]
 ids = range(len(classes))
 classDict = dict(zip(classes, ids))
+
+
+def write_data(data):
+    if os.path.isfile(results_path):
+        f = open(results_path, 'a')
+        f.write(data + '\n')
+    else:
+        f = open(results_path, 'w')
+        f.write(data + '\n')
+    f.close()
 
 
 def read_data(path):
@@ -55,11 +67,11 @@ def extract_features(data):
     return people
 
 
-def split_windows(data, overlap_ratio=1):
+def split_windows(data):
     outputs = []
     i = 0
     N = len(data)
-    increment = int(window_length * overlap_ratio)
+    increment = int(window_length * increment_ratio)
     while i + window_length < N:
         start = i
         end = start + window_length
