@@ -4,8 +4,6 @@ from sklearn.metrics.pairwise import cosine_similarity
 import read
 import sys
 
-#k = 3
-
 
 def cos_knn(k, test_data, test_labels, stored_data, stored_target):
     cosine = cosine_similarity(test_data, stored_data)
@@ -44,8 +42,8 @@ test_ids = list(feature_data.keys())
 test_id = [test_ids[0]]#[test_ids[sys.argv[1]]]
 
 _train_data, _test_data = split(feature_data, test_id)
-_train_data, _train_labels = flatten(_train_data)
 _test_data, _test_labels = flatten(_test_data)
+_train_data, _train_labels = flatten(_train_data)
 
 cos_knn(1, _test_data, _test_labels, _train_data, _train_labels)
 cos_knn(2, _test_data, _test_labels, _train_data, _train_labels)

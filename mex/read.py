@@ -3,7 +3,7 @@ import os
 import datetime as dt
 from scipy import fftpack
 import numpy as np
-
+import math
 frames_per_second = 1
 window_length = 5
 increment = 2
@@ -11,7 +11,7 @@ increment = 2
 ac_min_length = 95*window_length
 ac_max_length = 100*window_length
 
-path = '/Volumes/1708903/MEx/Data/min/'
+path = '/Volumes/1708903/MEx/Data/'
 results_file = 'np_acw_act_1.0.csv'
 
 frame_size = 3
@@ -174,7 +174,8 @@ def split_windows(data):
     frames = np.array(frames)
     _length = frames.shape[0]
     frames = np.reshape(frames, (_length*frame_size))
-    frames = frames/max(frames)
+    if max(frames) != 0:
+        frames = frames/max(frames)
     frames = [float("{0:.5f}".format(f)) for f in frames.tolist()]
     frames = np.reshape(np.array(frames), (_length, frame_size))
 
@@ -188,17 +189,43 @@ def split_windows(data):
     return outputs
 
 
-def dct(windows):
+def dct(windows, sensor, activity, subject):
     dct_window = []
     for tw in windows:
         x = [t[0] for t in tw]
         y = [t[1] for t in tw]
         z = [t[2] for t in tw]
+        '''
+        for d in x:
+            if math.isnan(d):
+                print('x:'+str(sensor)+','+str(activity)+','+str(subject))
 
+        for d in y:
+            if math.isnan(d):
+                print('y:'+str(sensor)+','+str(activity)+','+str(subject))
+
+        for d in z:
+            if math.isnan(d):
+                print('z:'+str(sensor)+','+str(activity)+','+str(subject))
+
+        print('dct')
+        '''
         dct_x = np.abs(fftpack.dct(x, norm='ortho'))
         dct_y = np.abs(fftpack.dct(y, norm='ortho'))
         dct_z = np.abs(fftpack.dct(z, norm='ortho'))
+        '''
+        for d in dct_x[:dct_length]:
+            if math.isnan(d):
+                print('x:'+str(sensor)+','+str(activity)+','+str(subject))
 
+        for d in dct_y[:dct_length]:
+            if math.isnan(d):
+                print('y:'+str(sensor)+','+str(activity)+','+str(subject))
+
+        for d in dct_z[:dct_length]:
+            if math.isnan(d):
+                print('z:'+str(sensor)+','+str(activity)+','+str(subject))
+        '''
         v = np.array([])
         v = np.concatenate((v, dct_x[:dct_length]))
         v = np.concatenate((v, dct_y[:dct_length]))
@@ -230,8 +257,8 @@ def extract_features(_data):
                     time_windows[sensor].extend(split_windows(activity_data[sensor]))
                 else:
                     time_windows[sensor] = split_windows(activity_data[sensor])
-            _activities[activity_id] = join(dct(time_windows[activity_data.keys()[0]]),
-                                            dct(time_windows[activity_data.keys()[1]]))
+            _activities[activity_id] = join(dct(time_windows[activity_data.keys()[0]], sensor, activity, subject),
+                                            dct(time_windows[activity_data.keys()[1]], sensor, activity, subject))
         _features[subject] = _activities
     return _features
 
