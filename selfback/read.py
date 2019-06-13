@@ -10,7 +10,7 @@ tf.set_random_seed(2)
 window_length = 500
 dct_length = 60
 increment_ratio = 1
-data_path = '/Users/anjanawijekoon/Data/SELFBACK/activity_data_34/merge/'
+data_path = '/Users/anjanawijekoon/Data/SELFBACK/activity_data_34/min/'
 results_path = 'results.csv'
 imus = [1, 2]
 
