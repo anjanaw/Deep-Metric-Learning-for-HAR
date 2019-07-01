@@ -11,7 +11,6 @@ window_length = 500
 dct_length = 60
 increment_ratio = 1
 data_path = '/Users/anjanawijekoon/Data/SELFBACK/activity_data_34/min/'
-results_path = 'results.csv'
 imus = [1, 2]
 
 classes = ["jogging", "sitting", "standing", "walkfast", "walkmod", "walkslow", "upstairs", "downstairs", "lying"]
@@ -19,7 +18,7 @@ ids = range(len(classes))
 classDict = dict(zip(classes, ids))
 
 
-def write_data(data):
+def write_data(results_path, data):
     if os.path.isfile(results_path):
         f = open(results_path, 'a')
         f.write(data + '\n')

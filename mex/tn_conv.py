@@ -10,14 +10,15 @@ import numpy as np
 from collections import defaultdict
 import sys
 import read
+import tensorflow as tf
 
-random.seed = 1337
-np.random.seed = 1337
+np.random.seed(1)
+tf.set_random_seed(2)
 
 mini_batch_size = 200
-batch_size = 128
+batch_size = 120
 steps_per_epoch = mini_batch_size
-feature_length = read.dct_length * 3 * len(read.imus)
+feature_length = read.dct_length * 3 * len(read.sensors)
 epochs = 10
 k = 3
 
@@ -35,7 +36,7 @@ def cos_knn(k, test_data, test_labels, stored_data, stored_target):
     for j in range(len(test_labels)):
         if test_labels[j] == pred[j]:
             correct += 1
-    read.write_data('tn_conv,3nn,'+str(test_ids[int(sys.argv[1])])+','+str(correct/float(len(test_labels))))
+    read.write_data('tn_conv.csv', 'tn_conv,3nn,'+str(test_ids[int(sys.argv[1])])+','+str(correct/float(len(test_labels))))
 
 
 def get_neighbours(instance, dataset, n):
@@ -48,7 +49,7 @@ def get_triples_minibatch_indices_me(dictionary):
         for value in dictionary[k]:
             anchor = value
             positive = random.choice(dictionary[k])
-            negative_labels = np.arange(9)
+            negative_labels = np.arange(len(read.activity_list))
             negative_label = random.choice(np.delete(negative_labels, np.argwhere(negative_labels == k)))
             negative = random.choice(dictionary[negative_label])
             triples_indices.append([anchor, positive, negative])
@@ -122,6 +123,7 @@ def build_conv_model(input_shape):
     x = Flatten()(x)
     x = Dense(1200, activation='relu')(x)
     embedding_model = Model(base_input, x, name='embedding')
+    embedding_model.summary()
 
     anchor_input = Input(input_shape, name='anchor_input')
     positive_input = Input(input_shape, name='positive_input')

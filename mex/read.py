@@ -11,8 +11,7 @@ increment = 2
 ac_min_length = 95*window_length
 ac_max_length = 100*window_length
 
-path = '/Volumes/1708903/MEx/Data/'
-results_file = 'np_acw_act_1.0.csv'
+path = '/Volumes/1708903/MEx/Data/min'
 
 frame_size = 3
 dct_length = 60
@@ -24,7 +23,7 @@ id_list = range(len(activity_list))
 activity_id_dict = dict(zip(activity_list, id_list))
 
 
-def write_data(data):
+def write_data(results_file, data):
     if os.path.isfile(results_file):
         f = open(results_file, 'a')
         f.write(data + '\n')
