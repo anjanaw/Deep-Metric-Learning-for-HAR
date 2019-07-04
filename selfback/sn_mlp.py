@@ -8,7 +8,6 @@ from keras import backend as K
 import read
 import tensorflow as tf
 import sys
-from keras.utils import np_utils
 
 np.random.seed(1)
 tf.set_random_seed(2)

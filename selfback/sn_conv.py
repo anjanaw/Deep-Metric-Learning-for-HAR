@@ -119,7 +119,7 @@ def split(_data, _test_ids):
 feature_data = read.read()
 
 test_ids = list(feature_data.keys())
-test_id = [test_ids[0]]#[test_ids[sys.argv[1]]]
+test_id = [test_ids[sys.argv[1]]]
 
 _train_data, _test_data = split(feature_data, test_id)
 _train_data, _train_labels = flatten(_train_data)
