@@ -1,21 +1,22 @@
+import keras
 import numpy as np
-from keras.layers import Input, Lambda, Dense, Conv1D
+import tensorflow as tf
+from keras.layers import Input, Lambda, Dense, Conv1D, MaxPooling1D, Flatten
+from keras.layers.merge import _Merge
 from keras.layers.normalization import BatchNormalization
 from keras.models import Model
-import keras
-import tensorflow as tf
-from keras.layers.merge import _Merge
 import read
 
 np.random.seed(1)
 tf.set_random_seed(2)
 
+batch_size = 60
 samples_per_class = 1
 classes_per_set = 5
-feature_length = read.dct_length * 3 * 3
-batch_size = 60
-epochs = 10
+candidates = 5
+feature_length = read.dct_length * 3 * len(read.imus)
 train_size = 500
+epochs = 10
 k = 3
 
 
@@ -27,7 +28,9 @@ class MatchCosine(_Merge):
         self.n_samp = n_samp
 
     def build(self, input_shape):
-        print('here')
+        if not isinstance(input_shape, list) or len(input_shape) != self.nway * self.n_samp + 2:
+            raise ValueError(
+                'A ModelCosine layer should be called on a list of inputs of length %d' % (self.nway * self.n_samp + 2))
 
     def call(self, inputs):
         self.nway = (len(inputs) - 2) / self.n_samp
@@ -80,16 +83,16 @@ def packslice(data_set):
 
         for j, cur_class in enumerate(classes):
             data_pack = data_set[cur_class]
-            example_inds = np.random.choice(len(data_pack), samples_per_class, False)
+            examples, indices = read.get_candidates(data_pack, candidates, samples_per_class)
 
-            for eind in example_inds:
-                slice_x[pinds[ind], :] = data_pack[eind]
+            for eind in examples:
+                slice_x[pinds[ind], :] = eind
                 slice_y[pinds[ind]] = j
                 ind += 1
 
             if j == x_hat_class:
                 target_indx = np.random.choice(len(data_pack))
-                while target_indx in example_inds:
+                while target_indx in indices:
                     target_indx = np.random.choice(len(data_pack))
                 slice_x[n_samples, :] = data_pack[target_indx]
                 target_y = j
@@ -105,6 +108,7 @@ def create_train_instances(train_sets):
     support_X = None
     support_y = None
     target_y = None
+
     for user_id, train_feats in train_sets.items():
         _support_X, _support_y, _target_y = packslice(train_feats)
 
@@ -125,7 +129,7 @@ def create_train_instances(train_sets):
 
 
 def mlp_embedding():
-    _input = Input(shape=(feature_length, 1))
+    _input = Input(shape=(feature_length,))
     x = Dense(1200, activation='relu')(_input)
     x = BatchNormalization()(x)
     return Model(inputs=_input, outputs=x, name='embedding')
@@ -144,13 +148,12 @@ for test_id in test_ids:
     _test_data = np.array(_test_data)
 
     numsupportset = samples_per_class * classes_per_set
-    input1 = Input((numsupportset + 1, feature_length, 1))
-
+    input1 = Input((numsupportset + 1, feature_length))
     modelinputs = []
     base_network = mlp_embedding()
     for lidx in range(numsupportset):
-        modelinputs.append(base_network(Lambda(lambda x: x[:, lidx, :, :])(input1)))
-    targetembedding = base_network(Lambda(lambda x: x[:, -1, :, :])(input1))
+        modelinputs.append(base_network(Lambda(lambda x: x[:, lidx, :])(input1)))
+    targetembedding = base_network(Lambda(lambda x: x[:, -1, :])(input1))
     modelinputs.append(targetembedding)
     supportlabels = Input((numsupportset, classes_per_set))
     modelinputs.append(supportlabels)
@@ -164,6 +167,7 @@ for test_id in test_ids:
     _test_preds = base_network.predict(_test_data)
 
     acc = read.cos_knn(k, _test_preds, _test_labels, _train_preds, _train_labels)
-    result = 'mn_mlp, 3nn,' + str(test_id) + ',' + str(acc)
+    result = 'prototype_mn_mlp, 3nn,' + str(test_id) + ',' + str(acc)
     print(result)
     read.write_data('mn_mlp.csv', result)
+

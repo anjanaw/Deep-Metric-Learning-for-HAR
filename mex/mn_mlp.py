@@ -3,7 +3,6 @@ from keras.layers import Input, Lambda, Dense, Conv1D
 from keras.layers.normalization import BatchNormalization
 from keras.models import Model
 import keras
-import sys
 import tensorflow as tf
 from keras.layers.merge import _Merge
 import read
@@ -11,12 +10,13 @@ import read
 np.random.seed(1)
 tf.set_random_seed(2)
 
-samples_per_class = 5
-classes_per_set = 7
+samples_per_class = 1
+classes_per_set = 5
 feature_length = read.dct_length * 3 * len(read.sensors)
 batch_size = 120
 epochs = 10
 train_size = 500
+k = 3
 
 
 class MatchCosine(_Merge):
@@ -62,23 +62,6 @@ class MatchCosine(_Merge):
         return (input_shapes[0][0], self.nway)
 
 
-def support_set_split(_data):
-    support_set = {}
-    everything_else = {}
-    for user, labels in _data.items():
-        _support_set = {}
-        _everything_else = {}
-        for label, data in labels.items():
-            supportset_indexes = np.random.choice(range(len(data)), samples_per_class, False)
-            supportset = [d for index, d in enumerate(data) if index in supportset_indexes]
-            everythingelse = [d for index, d in enumerate(data) if index not in supportset_indexes]
-            _support_set[label] = supportset
-            _everything_else[label] = everythingelse
-        support_set[user] = _support_set
-        everything_else[user] = _everything_else
-    return support_set, everything_else
-
-
 def packslice(data_set):
     n_samples = samples_per_class * classes_per_set
     support_cacheX = []
@@ -100,8 +83,8 @@ def packslice(data_set):
             example_inds = np.random.choice(len(data_pack), samples_per_class, False)
 
             for eind in example_inds:
-                slice_x[pinds[ind], :] = data_pack[eind]
-                slice_y[pinds[ind]] = cur_class
+                slice_x[pinds[ind], :] = eind
+                slice_y[pinds[ind]] = j
                 ind += 1
 
             if j == x_hat_class:
@@ -109,7 +92,7 @@ def packslice(data_set):
                 while target_indx in example_inds:
                     target_indx = np.random.choice(len(data_pack))
                 slice_x[n_samples, :] = data_pack[target_indx]
-                target_y = cur_class
+                target_y = j
 
         support_cacheX.append(slice_x)
         support_cacheY.append(keras.utils.to_categorical(slice_y, classes_per_set))
@@ -141,109 +124,47 @@ def create_train_instances(train_sets):
     return [support_X, support_y, target_y]
 
 
-def packslice_test(data_set, support_set):
-    n_samples = samples_per_class * classes_per_set
-    support_cacheX = []
-    support_cacheY = []
-    target_cacheY = []
-
-    support_X = np.zeros((n_samples, feature_length))
-    support_y = np.zeros((n_samples,))
-    for i, _class in enumerate(support_set.keys()):
-        X = support_set[_class]
-        for j in range(len(X)):
-            support_X[(i * samples_per_class) + j, :] = X[j]
-            support_y[(i * samples_per_class) + j] = _class
-
-    for _class in data_set:
-        X = data_set[_class]
-        for iiii in range(len(X)):
-            slice_x = np.zeros((n_samples + 1, feature_length))
-            slice_y = np.zeros((n_samples,))
-
-            slice_x[:n_samples, :] = support_X[:]
-            slice_x[n_samples, :] = X[iiii]
-
-            slice_y[:n_samples] = support_y[:]
-
-            target_y = _class
-
-            support_cacheX.append(slice_x)
-            support_cacheY.append(keras.utils.to_categorical(slice_y, classes_per_set))
-            target_cacheY.append(keras.utils.to_categorical(target_y, classes_per_set))
-
-    return np.array(support_cacheX), np.array(support_cacheY), np.array(target_cacheY)
-
-
-def create_test_instance(test_set, support_set):
-    support_X = None
-    support_y = None
-    target_y = None
-
-    for user_id, test_data in test_set.items():
-        support_data = support_set[user_id]
-        _support_X, _support_y, _target_y = packslice_test(test_data, support_data)
-
-        if support_X is not None:
-            support_X = np.concatenate((support_X, _support_X))
-            support_y = np.concatenate((support_y, _support_y))
-            target_y = np.concatenate((target_y, _target_y))
-        else:
-            support_X = _support_X
-            support_y = _support_y
-            target_y = _target_y
-
-    print("Data shapes: ")
-    print(support_X.shape)
-    print(support_y.shape)
-    print(target_y.shape)
-    return [support_X, support_y, target_y]
-
-
-def mlp_embedding(x):
-    x = Dense(1200, activation='relu')(x)
+def mlp_embedding():
+    _input = Input(shape=(feature_length,))
+    x = Dense(1200, activation='relu')(_input)
     x = BatchNormalization()(x)
-    return x
-
-
-def split(_data, _test_ids):
-    train_data_ = {key: value for key, value in _data.items() if key not in _test_ids}
-    test_data_ = {key: value for key, value in _data.items() if key in _test_ids}
-    return train_data_, test_data_
+    return Model(inputs=_input, outputs=x, name='embedding')
 
 
 feature_data = read.read()
 
 test_ids = list(feature_data.keys())
-print(test_ids)
-test_id = [test_ids[0]]#[test_ids[sys.argv[1]]]
+for test_id in test_ids:
+    _train_data, _test_data = read.split(feature_data, test_id)
+    train_data = create_train_instances(_train_data)
 
-_train_features, _test_features = split(feature_data, test_id)
-train_data = create_train_instances(_train_features)
+    _train_data, _train_labels = read.flatten(_train_data)
+    _test_data, _test_labels = read.flatten(_test_data)
+    _train_data = np.array(_train_data)
+    _test_data = np.array(_test_data)
 
-test_support_set, _test_features = support_set_split(_test_features)
-test_data = create_test_instance(_test_features, test_support_set)
+    numsupportset = samples_per_class * classes_per_set
+    input1 = Input((numsupportset + 1, feature_length))
 
-numsupportset = samples_per_class * classes_per_set
-input1 = Input((numsupportset + 1, feature_length))
+    modelinputs = []
+    base_network = mlp_embedding()
+    for lidx in range(numsupportset):
+        modelinputs.append(base_network(Lambda(lambda x: x[:, lidx, :])(input1)))
+    targetembedding = base_network(Lambda(lambda x: x[:, -1, :])(input1))
+    modelinputs.append(targetembedding)
+    supportlabels = Input((numsupportset, classes_per_set))
+    modelinputs.append(supportlabels)
+    knnsimilarity = MatchCosine(nway=classes_per_set, n_samp=samples_per_class)(modelinputs)
 
-modelinputs = []
-for lidx in range(numsupportset):
-    modelinputs.append(mlp_embedding(Lambda(lambda x: x[:, lidx, :])(input1)))
-targetembedding = mlp_embedding(Lambda(lambda x: x[:, -1, :])(input1))
-modelinputs.append(targetembedding)
-supportlabels = Input((numsupportset, classes_per_set))
-modelinputs.append(supportlabels)
-knnsimilarity = MatchCosine(nway=classes_per_set, n_samp=samples_per_class)(modelinputs)
+    model = Model(inputs=[input1, supportlabels], outputs=knnsimilarity)
+    model.compile(optimizer='adam', loss='categorical_crossentropy', metrics=['accuracy'])
+    model.fit([train_data[0], train_data[1]], train_data[2], epochs=epochs, batch_size=batch_size, verbose=1)
 
-model = Model(inputs=[input1, supportlabels], outputs=knnsimilarity)
-model.compile(optimizer='adam', loss='categorical_crossentropy', metrics=['accuracy'])
-model.fit([train_data[0], train_data[1]], train_data[2], epochs=epochs, batch_size=batch_size, verbose=1)
-score = model.evaluate([test_data[0], test_data[1]], test_data[2], batch_size=batch_size, verbose=1)
+    _train_preds = base_network.predict(_train_data)
+    _test_preds = base_network.predict(_test_data)
 
-print(score)
-read.write_data('mlp architecture' + ',' + 'window_length:' + str(read.window_length) + ',' + 'dct_length:' + str(
-    read.dct_length) + ',' + 'increment_ratio:' + str(read.increment) + ',' + 'classes_per_set:' + str(
-    classes_per_set) + ',' + 'samples_per_class:' +str(samples_per_class) + ',' + 'train_size:' + str(
-    train_size) + ',' + 'batch_size:' + str(batch_size) + ',' + 'epochs:' + str(epochs) + ',' + 'test_id:' + str(
-    test_id[0]) + ',' + 'score:' + ','.join([str(f) for f in score]))
+    acc = read.cos_knn(k, _test_preds, _test_labels, _train_preds, _train_labels)
+    result = 'mn_mlp, 3nn,' + str(test_id) + ',' + str(acc)
+    print(result)
+    read.write_data('mn_mlp.csv', result)
+

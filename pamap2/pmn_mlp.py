@@ -12,6 +12,7 @@ tf.set_random_seed(2)
 
 samples_per_class = 1
 classes_per_set = 5
+candidates = 5
 feature_length = read.dct_length * 3 * 3
 batch_size = 60
 epochs = 10
@@ -80,16 +81,16 @@ def packslice(data_set):
 
         for j, cur_class in enumerate(classes):
             data_pack = data_set[cur_class]
-            example_inds = np.random.choice(len(data_pack), samples_per_class, False)
+            examples, indices = read.get_candidates(data_pack, candidates, samples_per_class)
 
-            for eind in example_inds:
+            for eind in examples:
                 slice_x[pinds[ind], :] = data_pack[eind]
                 slice_y[pinds[ind]] = j
                 ind += 1
 
             if j == x_hat_class:
                 target_indx = np.random.choice(len(data_pack))
-                while target_indx in example_inds:
+                while target_indx in indices:
                     target_indx = np.random.choice(len(data_pack))
                 slice_x[n_samples, :] = data_pack[target_indx]
                 target_y = j
@@ -164,6 +165,6 @@ for test_id in test_ids:
     _test_preds = base_network.predict(_test_data)
 
     acc = read.cos_knn(k, _test_preds, _test_labels, _train_preds, _train_labels)
-    result = 'mn_mlp, 3nn,' + str(test_id) + ',' + str(acc)
+    result = 'prototype_mn_mlp, 3nn,' + str(test_id) + ',' + str(acc)
     print(result)
     read.write_data('mn_mlp.csv', result)

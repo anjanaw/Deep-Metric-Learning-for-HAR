@@ -4,10 +4,12 @@ import os
 import csv
 import tensorflow as tf
 
+from sklearn.metrics.pairwise import cosine_similarity
+import heapq
+
 tf.set_random_seed(2)
 np.random.seed(1)
 
-samples_per_class = 5
 train_size = 500
 epochs = 20
 all_classes = 8
@@ -22,6 +24,42 @@ classDict = dict(zip(classes, ids))
 optional_path = '/Users/anjanawijekoon/Data/PAMAP2/data/Optional/'
 protocol_path = '/Users/anjanawijekoon/Data/PAMAP2/data/Protocol/'
 results_path = 'results.csv'
+
+
+def cos_knn(k, test_data, test_labels, train_data, train_labels):
+    cosim = cosine_similarity(test_data, train_data)
+
+    top = [(heapq.nlargest((k), range(len(i)), i.take)) for i in cosim]
+    top = [[train_labels[j] for j in i[:k]] for i in top]
+
+    pred = [max(set(i), key=i.count) for i in top]
+    pred = np.array(pred)
+
+    correct = 0
+    for j in range(len(test_labels)):
+        if test_labels[j] == pred[j]:
+            correct += 1
+    acc = correct / float(len(test_labels))
+    return acc
+
+
+def flatten(_data):
+    flatten_data = []
+    flatten_labels = []
+
+    for subject in _data:
+        activities = _data[subject]
+        for activity in activities:
+            activity_data = activities[activity]
+            flatten_data.extend(activity_data)
+            flatten_labels.extend([activity for i in range(len(activity_data))])
+    return flatten_data, flatten_labels
+
+
+def split(_data, _test_ids):
+    train_data_ = {key: value for key, value in _data.items() if key not in _test_ids}
+    test_data_ = {key: value for key, value in _data.items() if key in _test_ids}
+    return train_data_, test_data_
 
 
 def write_data(data):
@@ -143,3 +181,44 @@ def read():
     user_data = keep_class(user_data)
     feature_data = extract_features(user_data)
     return feature_data
+
+
+def get_candidates(_data, candidates, samples_per_class):
+    prototype_candidates = np.random.choice(len(_data), samples_per_class*candidates, False)
+    prototypes = []
+    for i in prototype_candidates:
+        prototypes.append(_data[i])
+
+    examples = []
+    for i in range(samples_per_class):
+        examples.append(np.mean(prototypes[i*candidates:(i+1)*candidates], axis=0))
+
+    return examples, prototype_candidates
+
+
+def remove_class(_data, remove_classes):
+    data = {}
+    for user_id, labels in _data.items():
+        _labels = {}
+        for label in labels:
+            if label not in remove_classes:
+                _labels[label] = labels[label]
+        data[user_id] = _labels
+    return data
+
+
+def support_set_split(_data, k_shot):
+    support_set = {}
+    everything_else = {}
+    for user, labels in _data.items():
+        _support_set = {}
+        _everything_else = {}
+        for label, data in labels.items():
+            supportset_indexes = np.random.choice(range(len(data)), k_shot, False)
+            supportset = [d for index, d in enumerate(data) if index in supportset_indexes]
+            everythingelse = [d for index, d in enumerate(data) if index not in supportset_indexes]
+            _support_set[label] = supportset
+            _everything_else[label] = everythingelse
+        support_set[user] = _support_set
+        everything_else[user] = _everything_else
+    return support_set, everything_else

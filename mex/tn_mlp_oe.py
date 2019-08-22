@@ -3,8 +3,6 @@ from keras.layers import Input, Dense
 from keras import backend as K
 
 import random
-import heapq
-from sklearn.metrics.pairwise import cosine_similarity
 import numpy as np
 from collections import defaultdict
 import read
@@ -14,29 +12,12 @@ np.random.seed(1)
 tf.set_random_seed(2)
 
 mini_batch_size = 200
-batch_size = 120
+batch_size = 60
 steps_per_epoch = mini_batch_size
 feature_length = read.dct_length * 3 * len(read.sensors)
 epochs = 10
 k = 3
-k_shot = 10
-
-
-def cos_knn(k, test_data, test_labels, support_data, support_labels):
-    cosim = cosine_similarity(test_data, support_data)
-
-    top = [(heapq.nlargest((k), range(len(i)), i.take)) for i in cosim]
-    top = [[support_labels[j] for j in i[:k]] for i in top]
-
-    pred = [max(set(i), key=i.count) for i in top]
-    pred = np.array(pred)
-
-    correct = 0
-    for j in range(len(test_labels)):
-        if test_labels[j] == pred[j]:
-            correct += 1
-    acc = correct/float(len(test_labels))
-    return acc
+k_shot = 5
 
 
 def get_neighbours(instance, dataset, n):
@@ -138,25 +119,6 @@ def build_mlp_model(input_shape):
     return embedding_model, triplet_model
 
 
-def split(_data, _test_ids):
-    train_data_ = {key: value for key, value in _data.items() if key not in _test_ids}
-    test_data_ = {key: value for key, value in _data.items() if key in _test_ids}
-    return train_data_, test_data_
-
-
-def flatten(_data):
-    flatten_data = []
-    flatten_labels = []
-
-    for subject in _data:
-        activities = _data[subject]
-        for activity in activities:
-            activity_data = activities[activity]
-            flatten_data.extend(activity_data)
-            flatten_labels.extend([activity for i in range(len(activity_data))])
-    return flatten_data, flatten_labels
-
-
 feature_data = read.read()
 
 test_ids = list(feature_data.keys())
@@ -165,13 +127,13 @@ all_labels = list(feature_data[test_ids[0]].keys())
 for test_id in test_ids:
     for a_label in all_labels:
         train_labels = [a for a in all_labels if a != a_label]
-        _train_data, _test_data = split(feature_data, test_id)
+        _train_data, _test_data = read.split(feature_data, test_id)
         _train_data = read.remove_class(_train_data, [a_label])
 
         _support_data, _test_data = read.support_set_split(_test_data, k_shot)
 
-        _train_data, _train_labels = flatten(_train_data)
-        _support_data, _support_labels = flatten(_support_data)
+        _train_data, _train_labels = read.flatten(_train_data)
+        _support_data, _support_labels = read.flatten(_support_data)
 
         _train_data = np.array(_train_data)
         _support_data = np.array(_support_data)
@@ -190,6 +152,6 @@ for test_id in test_ids:
             _test_label_data = np.array(_test_label_data)
             _test_preds = _embedding_model.predict(_test_label_data)
 
-            acc = cos_knn(k, _test_preds, _test_labels, _support_preds, _support_labels)
+            acc = read.cos_knn(k, _test_preds, _test_labels, _support_preds, _support_labels)
             result = 'tn_mlp, 3nn,' + str(test_id) + ',' + str(a_label) + ',' + str(_l) + ',' + str(acc)
             read.write_data('tn_mlp_oe.csv', result)

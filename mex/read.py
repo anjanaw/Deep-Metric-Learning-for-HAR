@@ -3,7 +3,9 @@ import os
 import datetime as dt
 from scipy import fftpack
 import numpy as np
-import math
+from sklearn.metrics.pairwise import cosine_similarity
+import heapq
+
 frames_per_second = 1
 window_length = 5
 increment = 2
@@ -21,6 +23,42 @@ sensors = ['acw', 'act']
 activity_list = ['01', '02', '03', '04', '05', '06', '07']
 id_list = range(len(activity_list))
 activity_id_dict = dict(zip(activity_list, id_list))
+
+
+def cos_knn(k, test_data, test_labels, train_data, train_labels):
+    cosim = cosine_similarity(test_data, train_data)
+
+    top = [(heapq.nlargest((k), range(len(i)), i.take)) for i in cosim]
+    top = [[train_labels[j] for j in i[:k]] for i in top]
+
+    pred = [max(set(i), key=i.count) for i in top]
+    pred = np.array(pred)
+
+    correct = 0
+    for j in range(len(test_labels)):
+        if test_labels[j] == pred[j]:
+            correct += 1
+    acc = correct / float(len(test_labels))
+    return acc
+
+
+def flatten(_data):
+    flatten_data = []
+    flatten_labels = []
+
+    for subject in _data:
+        activities = _data[subject]
+        for activity in activities:
+            activity_data = activities[activity]
+            flatten_data.extend(activity_data)
+            flatten_labels.extend([activity for i in range(len(activity_data))])
+    return flatten_data, flatten_labels
+
+
+def split(_data, _test_ids):
+    train_data_ = {key: value for key, value in _data.items() if key not in _test_ids}
+    test_data_ = {key: value for key, value in _data.items() if key in _test_ids}
+    return train_data_, test_data_
 
 
 def write_data(results_file, data):
@@ -293,3 +331,16 @@ def extract_features(_data):
 def read():
     all_data = _read_()
     return extract_features(all_data)
+
+
+def get_candidates(_data, candidates, samples_per_class):
+    prototype_candidates = np.random.choice(len(_data), samples_per_class*candidates, False)
+    prototypes = []
+    for i in prototype_candidates:
+        prototypes.append(_data[i])
+
+    examples = []
+    for i in range(samples_per_class):
+        examples.append(np.mean(prototypes[i*candidates:(i+1)*candidates], axis=0))
+
+    return examples, prototype_candidates
