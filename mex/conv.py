@@ -4,7 +4,8 @@ from keras.layers import Input, Dense, Conv1D, MaxPooling1D, Flatten, BatchNorma
 from keras.models import Model
 from tensorflow import set_random_seed
 import os
-
+import heapq
+from sklearn.metrics.pairwise import cosine_similarity
 import random
 import sys
 import read
@@ -23,6 +24,22 @@ def split(_data, _test_ids):
     return train_data_, test_data_
 
 
+def cos_knn(k, test_data, test_labels, stored_data, stored_target):
+    cosim = cosine_similarity(test_data, stored_data)
+
+    top = [(heapq.nlargest((k), range(len(i)), i.take)) for i in cosim]
+    top = [[stored_target[j] for j in i[:k]] for i in top]
+
+    pred = [max(set(i), key=i.count) for i in top]
+    pred = np.array(pred)
+
+    correct = 0
+    for j in range(len(test_labels)):
+        if test_labels[j] == pred[j]:
+            correct += 1
+    return correct / float(len(test_labels))
+
+
 def flatten(_data):
     flatten_data = []
     flatten_labels = []
@@ -37,46 +54,55 @@ def flatten(_data):
 
 
 def conv():
-    _input = Input(shape=(read.dct_length*3*len(read.sensors),1))
+    _input = Input(shape=(read.dct_length*3*len(read.sensors), 1))
     x = Conv1D(32, kernel_size=5, activation='relu')(_input)
     x = MaxPooling1D(pool_size=2)(x)
     x = BatchNormalization()(x)
     x = Flatten()(x)
     x = Dense(100, activation='relu')(x)
     x = BatchNormalization()(x)
-    x = Dense(len(read.activity_list), activation='softmax')(x)
-
-    model = Model(inputs=_input, outputs=x)
-    model.summary()
-    return model
+    return Model(inputs=_input, outputs=x, name='embedding')
 
 
 all_features = read.read()
 test_ids = list(all_features.keys())
-test_id = [test_ids[0]]#[test_ids[sys.argv[1]]]
 
-_train_features, _test_features = split(all_features, test_id)
+for test_id in test_ids:
 
-_train_features, _train_labels = flatten(_train_features)
-_test_features, _test_labels = flatten(_test_features)
+    _train_features, _test_features = split(all_features, test_id)
 
-_train_labels = np_utils.to_categorical(_train_labels, len(read.activity_list))
-_test_labels = np_utils.to_categorical(_test_labels, len(read.activity_list))
+    _train_features, _train_labels = flatten(_train_features)
+    _test_features, _test_labels = flatten(_test_features)
 
-_train_features = np.array(_train_features)
-_train_features = np.expand_dims(_train_features, 3)
-print(_train_features.shape)
+    _train_labels_ = np_utils.to_categorical(_train_labels, len(read.activity_list))
+    _test_labels_ = np_utils.to_categorical(_test_labels, len(read.activity_list))
 
-_test_features = np.array(_test_features)
-_test_features = np.expand_dims(_test_features, 3)
-print(_test_features.shape)
+    _train_features = np.array(_train_features)
+    _train_features = np.expand_dims(_train_features, 3)
+    print(_train_features.shape)
 
-_model = conv()
-_model.compile(optimizer='adam', loss='categorical_crossentropy', metrics=['accuracy'])
-_model.fit(_train_features, _train_labels, verbose=1, batch_size=batch_size, epochs=epochs, shuffle=True)
-results = _model.evaluate(_test_features, _test_labels, batch_size=batch_size, verbose=0)
-print(results)
-read.write_data('conv architecture' + ',' + 'window_length:' + str(read.window_length) + ',' + 'dct_length:' + str(
-    read.dct_length) + ',' + 'increment_ratio:' + str(read.increment_ratio) + ',' + 'batch_size:' + str(
-    batch_size) + ',' + 'epochs:' + str(epochs) + ',' + 'test_id:' + str(test_id[0]) + ',' + 'score:' + ','.join(
-    [str(f) for f in results]))
+    _test_features = np.array(_test_features)
+    _test_features = np.expand_dims(_test_features, 3)
+    print(_test_features.shape)
+
+    _input_ = Input(shape=(read.dct_length*3*len(read.sensors), 1))
+    base_network = conv()
+    base = base_network(_input_)
+    classifier = Dense(len(read.activity_list), activation='softmax')(base)
+    _model = Model(inputs=_input_, outputs=classifier, name='classifier')
+
+    _model.compile(optimizer='adam', loss='categorical_crossentropy', metrics=['accuracy'])
+    _model.fit(_train_features, _train_labels_, verbose=1, batch_size=batch_size, epochs=epochs, shuffle=True)
+
+    _train_preds = base_network.predict(_train_features)
+    _test_preds = base_network.predict(_test_features)
+
+    # classifier evaluation
+    results = _model.evaluate(_test_features, _test_labels_, batch_size=batch_size, verbose=0)
+    print(results)
+
+    # knn evaluation
+    k = 3
+    acc = cos_knn(k, _test_preds, _test_labels, _train_preds, _train_labels)
+
+    read.write_data('conv.csv', 'score'+','.join([str(f) for f in results])+'knn_acc'+str(acc))

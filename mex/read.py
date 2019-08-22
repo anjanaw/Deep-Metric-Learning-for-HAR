@@ -11,7 +11,7 @@ increment = 2
 ac_min_length = 95*window_length
 ac_max_length = 100*window_length
 
-path = '/Volumes/1708903/MEx/Data/min'
+path = '/Users/anjanawijekoon/Data/MEx/min'
 
 frame_size = 3
 dct_length = 60
@@ -31,6 +31,34 @@ def write_data(results_file, data):
         f = open(results_file, 'w')
         f.write(data + '\n')
     f.close()
+
+
+def remove_class(_data, remove_classes):
+    data = {}
+    for user_id, labels in _data.items():
+        _labels = {}
+        for label in labels:
+            if label not in remove_classes:
+                _labels[label] = labels[label]
+        data[user_id] = _labels
+    return data
+
+
+def support_set_split(_data, k_shot):
+    support_set = {}
+    everything_else = {}
+    for user, labels in _data.items():
+        _support_set = {}
+        _everything_else = {}
+        for label, data in labels.items():
+            supportset_indexes = np.random.choice(range(len(data)), k_shot, False)
+            supportset = [d for index, d in enumerate(data) if index in supportset_indexes]
+            everythingelse = [d for index, d in enumerate(data) if index not in supportset_indexes]
+            _support_set[label] = supportset
+            _everything_else[label] = everythingelse
+        support_set[user] = _support_set
+        everything_else[user] = _everything_else
+    return support_set, everything_else
 
 
 def _read(_file, _length):
