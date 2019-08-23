@@ -15,7 +15,7 @@ tf.set_random_seed(2)
 mini_batch_size = 200
 batch_size = 60
 steps_per_epoch = mini_batch_size
-feature_length = read.dct_length * 3 * len(read.sensors)
+feature_length = read.dct_length * 3 * len(read.imus)
 epochs = 10
 candidates = 5
 k = 3
@@ -39,7 +39,7 @@ def get_triples_minibatch_indices_me(x, dictionary):
             anchor = x[value]
             others = [f for f in dictionary[k] if f != value]
             positive = prototype(x, others, candidates)
-            negative_labels = np.arange(len(read.activity_list))
+            negative_labels = np.arange(len(read.classes))
             negative_label = random.choice(np.delete(negative_labels, np.argwhere(negative_labels == k)))
             negative = prototype(x, dictionary[negative_label], candidates)
             triples_indices.append([anchor, positive, negative])

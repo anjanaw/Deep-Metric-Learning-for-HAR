@@ -11,6 +11,7 @@ import tensorflow as tf
 np.random.seed(1)
 tf.set_random_seed(2)
 
+num_test_classes = 2
 mini_batch_size = 200
 batch_size = 60
 steps_per_epoch = mini_batch_size
@@ -18,7 +19,6 @@ feature_length = read.dct_length * 3 * len(read.sensors)
 epochs = 10
 k_shot = 5
 k = 3
-num_test_classes = 2
 
 
 def get_neighbours(instance, dataset, n):
@@ -82,7 +82,6 @@ test_ids = list(feature_data.keys())
 all_labels = list(feature_data[test_ids[0]].keys())
 
 for test_id in test_ids:
-    # for a_label in all_labels:
     for _int in range(5):
         test_labels_indices = np.random.choice(len(all_labels), num_test_classes, False)
         test_labels = [a for ii, a in enumerate(all_labels) if ii in test_labels_indices]
@@ -132,5 +131,5 @@ for test_id in test_ids:
             _test_preds = base_network.predict(_test_label_data)
 
             acc = read.cos_knn(k, _test_preds, _test_labels, _support_preds, _support_labels)
-            result = 'sn_mlp, 3nn,' + str(test_id) + ',' + ','.join[test_labels] + ',' + str(_l) + ',' + str(acc)
-            read.write_data('sn_mlp_oe.csv', result)
+            result = 'sn_mlp, 3nn,' + str(num_test_classes) + ',' + str(test_id) + ',' + ','.join([str(t) for t in test_labels]) + ',' + str(_l) + ',' + str(acc)
+            read.write_data('sn_mlp_oe_n.csv', result)

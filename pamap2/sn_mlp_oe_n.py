@@ -3,8 +3,7 @@ import random
 import heapq
 from sklearn.metrics.pairwise import cosine_similarity
 from keras.models import Model
-from keras.layers import Dense, Input, Lambda, Conv1D, MaxPooling1D, Flatten
-from keras.layers.normalization import BatchNormalization
+from keras.layers import Dense, Input, Lambda
 from keras import backend as K
 import read
 import tensorflow as tf
@@ -16,7 +15,7 @@ num_test_classes = 2
 mini_batch_size = 200
 batch_size = 60
 steps_per_epoch = mini_batch_size
-feature_length = read.dct_length * 3 * len(read.sensors)
+feature_length = read.dct_length * 3 * 3
 epochs = 10
 k_shot = 5
 k = 3
@@ -70,14 +69,11 @@ def create_pairs(x, digit_indices, num_classes):
     return np.array(pairs), np.array(labels)
 
 
-def build_conv_model():
-    _input = Input(shape=(feature_length, 1))
-    x = Conv1D(12, kernel_size=3, activation='relu')(_input)
-    x = MaxPooling1D(pool_size=2)(x)
-    x = BatchNormalization()(x)
-    x = Flatten()(x)
-    x = Dense(1200, activation='relu')(x)
-    return Model(inputs=_input, outputs=x, name='embedding')
+def build_mlp_model(input_shape):
+    base_input = Input((input_shape,))
+    x = Dense(1200, activation='relu')(base_input)
+    embedding_model = Model(base_input, x, name='embedding')
+    return embedding_model
 
 
 feature_data = read.read()
@@ -101,17 +97,15 @@ for test_id in test_ids:
         _support_data, _support_labels = read.flatten(_support_data)
 
         _train_data = np.array(_train_data)
-        _train_data = np.expand_dims(_train_data, 3)
         _support_data = np.array(_support_data)
-        _support_data = np.expand_dims(_support_data, 3)
 
         _train_labels = np.array(_train_labels)
         _support_labels = np.array(_support_labels)
 
-        base_network = build_conv_model()
+        base_network = build_mlp_model(feature_length)
 
-        input_a = Input(shape=(feature_length, 1))
-        input_b = Input(shape=(feature_length, 1))
+        input_a = Input(shape=(feature_length,))
+        input_b = Input(shape=(feature_length,))
 
         processed_a = base_network(input_a)
         processed_b = base_network(input_b)
@@ -133,11 +127,9 @@ for test_id in test_ids:
             _test_label_data = _test_data[test_id][_l]
             _test_labels = [_l for i in range(len(_test_label_data))]
             _test_label_data = np.array(_test_label_data)
-            _test_label_data = np.expand_dims(_test_label_data, 3)
             _test_labels = np.array(_test_labels)
             _test_preds = base_network.predict(_test_label_data)
 
             acc = read.cos_knn(k, _test_preds, _test_labels, _support_preds, _support_labels)
-            result = 'sn_conv, 3nn,' + str(num_test_classes) + ',' + str(test_id) + ',' + ','.join([str(t) for t in test_labels]) + ',' + str(_l) + ',' + str(acc)
-            read.write_data('sn_conv_oe_n.csv', result)
-
+            result = 'sn_mlp, 3nn,' + str(num_test_classes) + ',' + str(test_id) + ',' + ','.join([str(t) for t in test_labels]) + ',' + str(_l) + ',' + str(acc)
+            read.write_data('sn_mlp_oe_n.csv', result)

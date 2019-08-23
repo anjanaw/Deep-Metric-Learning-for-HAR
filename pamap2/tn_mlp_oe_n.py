@@ -11,69 +11,62 @@ import tensorflow as tf
 np.random.seed(1)
 tf.set_random_seed(2)
 
+num_test_classes = 2
 mini_batch_size = 200
 batch_size = 60
 steps_per_epoch = mini_batch_size
-feature_length = read.dct_length * 3 * len(read.sensors)
+feature_length = read.dct_length * 3 * 3
 epochs = 10
 k = 3
-candidates = 5
-
-
-def prototype(x, data_samples, no_samples):
-    data_samples = random.sample(data_samples, no_samples)
-    data_samples = [x[index] for index in data_samples]
-    data_samples = np.asarray(data_samples)
-    return data_samples.mean(0)
+k_shot = 5
 
 
 def get_neighbours(instance, dataset, n):
     return np.argsort(np.linalg.norm(dataset - instance, axis=1))[:n]
 
 
-def get_triples_minibatch_indices_me(x, dictionary):
+def get_triples_minibatch_indices_me(dictionary, _labels):
     triples_indices = []
     for k in dictionary.keys():
         for value in dictionary[k]:
-            anchor = x[value]
-            others = [f for f in dictionary[k] if f != value]
-            positive = prototype(x, others, candidates)
-            negative_labels = np.arange(len(read.activity_list))
-            negative_label = random.choice(np.delete(negative_labels, np.argwhere(negative_labels == k)))
-            negative = prototype(x, dictionary[negative_label], candidates)
+            anchor = value
+            positive = random.choice(dictionary[k])
+            negative_labels = [l for l in _labels if l != k ]
+            negative_label = random.choice(negative_labels)
+            negative = random.choice(dictionary[negative_label])
             triples_indices.append([anchor, positive, negative])
-    random.shuffle(triples_indices)
+
     return np.asarray(triples_indices)
 
 
-def get_triples_minibatch_data_u(x, dictionary):
-    indices = get_triples_minibatch_indices_me(x, dictionary)
-    return indices[:, 0], indices[:, 1], indices[:, 2]
+def get_triples_minibatch_data_u(x, dictionary, _labels):
+    indices = get_triples_minibatch_indices_me(dictionary, _labels)
+    return x[indices[:, 0]], x[indices[:, 1]], x[indices[:, 2]]
 
 
-def triplet_generator_minibatch(x, y, no_minibatch):
+def triplet_generator_minibatch(x, y, no_minibatch, _labels):
     grouped = defaultdict(list)
     dict_list = []
 
     for i, label in enumerate(y):
         grouped[label].append(i)
 
-    for kk in range(len(grouped)):
-        random.shuffle(grouped[kk])
+    for k in list(grouped.keys()):
+        random.shuffle(grouped[k])
 
     for j in range(no_minibatch):
         dictionary = {}
 
-        for kk in range(len(grouped)):
-            ran_sam = random.sample(grouped[kk], candidates+1)
-            dictionary[kk] = ran_sam
+        for k in list(grouped.keys()):
+            ran_sam = random.sample(grouped[k], 3)
+            dictionary[k] = ran_sam
 
         dict_list.append(dictionary)
 
     i = 0
 
     while 1:
-        x_anchor, x_positive, x_negative = get_triples_minibatch_data_u(x, dict_list[i])
+        x_anchor, x_positive, x_negative = get_triples_minibatch_data_u(x, dict_list[i], _labels)
 
         if i == (no_minibatch - 1):
             i = 0
@@ -130,24 +123,40 @@ def build_mlp_model(input_shape):
 feature_data = read.read()
 
 test_ids = list(feature_data.keys())
+all_labels = list(feature_data[test_ids[0]].keys())
+
 for test_id in test_ids:
+    for _int in range(5):
+        test_labels_indices = np.random.choice(len(all_labels), num_test_classes, False)
+        test_labels = [a for ii, a in enumerate(all_labels) if ii in test_labels_indices]
+        print(test_labels)
+        train_labels = [a for ii, a in enumerate(all_labels) if ii not in test_labels_indices]
+        print(train_labels)
+        _train_data, _test_data = read.split(feature_data, test_id)
+        _train_data = read.remove_class(_train_data, test_labels)
 
-    _train_data, _test_data = read.split(feature_data, test_id)
-    _train_data, _train_labels = read.flatten(_train_data)
-    _test_data, _test_labels = read.flatten(_test_data)
+        _support_data, _test_data = read.support_set_split(_test_data, k_shot)
 
-    _train_data = np.array(_train_data)
-    _test_data = np.array(_test_data)
+        _train_data, _train_labels = read.flatten(_train_data)
+        _support_data, _support_labels = read.flatten(_support_data)
 
-    _embedding_model, _triplet_model = build_mlp_model((feature_length,))
+        _train_data = np.array(_train_data)
+        _support_data = np.array(_support_data)
 
-    _triplet_model.fit_generator(triplet_generator_minibatch(_train_data, _train_labels, mini_batch_size),
-                                 steps_per_epoch=steps_per_epoch, epochs=epochs, verbose=1)
+        _embedding_model, _triplet_model = build_mlp_model((feature_length,))
 
-    _train_preds = _embedding_model.predict(_train_data)
-    _test_preds = _embedding_model.predict(_test_data)
+        _triplet_model.fit_generator(triplet_generator_minibatch(_train_data, _train_labels, mini_batch_size
+                                                                 , train_labels),
+                                     steps_per_epoch=steps_per_epoch, epochs=epochs, verbose=1)
 
-    acc = read.cos_knn(k, _test_preds, _test_labels, _train_preds, _train_labels)
-    result = 'prototype_tn_mlp, 3nn,' + str(test_id) + ',' + str(acc)
-    print(result)
-    read.write_data('tn_mlp.csv', result)
+        _support_preds = _embedding_model.predict(_support_data)
+
+        for _l in list(_test_data[test_id].keys()):
+            _test_label_data = _test_data[test_id][_l]
+            _test_labels = [_l for i in range(len(_test_label_data))]
+            _test_label_data = np.array(_test_label_data)
+            _test_preds = _embedding_model.predict(_test_label_data)
+
+            acc = read.cos_knn(k, _test_preds, _test_labels, _support_preds, _support_labels)
+            result = 'tn_mlp, 3nn,' + str(num_test_classes) + ',' + str(test_id) + ',' + ','.join([str(t) for t in test_labels]) + ',' + str(_l) + ',' + str(acc)
+            read.write_data('tn_mlp_oe_n.csv', result)

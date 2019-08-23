@@ -10,14 +10,14 @@ import read
 np.random.seed(1)
 tf.set_random_seed(2)
 
+num_test_classes = 2
 batch_size = 60
 samples_per_class = 5
-classes_per_set = 6
-feature_length = read.dct_length * 3 * 3
+classes_per_set = len(read.classes) - num_test_classes
+feature_length = read.dct_length * 3 * len(read.sensors)
 train_size = 500
 epochs = 10
 k = 3
-num_test_classes = 2
 
 
 class MatchCosine(_Merge):
@@ -193,6 +193,6 @@ for test_id in test_ids:
             _test_preds = base_network.predict(_test_label_data)
 
             acc = read.cos_knn(k, _test_preds, _test_labels, _support_preds, _support_labels)
-            # result = 'mn_mlp, 3nn,' + str(test_id) + ',' + str(a_label) + ',' + str(_l) + ',' + str(acc)
-            result = 'mn_conv, 3nn,' + str(test_id) + ',' + ','.join[test_labels] + ',' + str(_l) + ',' + str(acc)
-            read.write_data('mn_conv_oe.csv', result)
+            # result = 'mn_conv, 3nn,' + str(test_id) + ',' + str(a_label) + ',' + str(_l) + ',' + str(acc)
+            result = 'mn_conv, 3nn,' + str(num_test_classes) + ',' + str(test_id) + ',' + ','.join([str(t) for t in test_labels]) + ',' + str(_l) + ',' + str(acc)
+            read.write_data('mn_conv_oe_n.csv', result)

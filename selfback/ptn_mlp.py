@@ -1,6 +1,5 @@
 from keras.models import Model
-from keras.layers import Input, Dense, Conv1D, MaxPooling1D, Flatten
-from keras.layers.normalization import BatchNormalization
+from keras.layers import Input, Dense
 from keras import backend as K
 
 import random
@@ -15,10 +14,10 @@ tf.set_random_seed(2)
 mini_batch_size = 200
 batch_size = 60
 steps_per_epoch = mini_batch_size
-feature_length = read.dct_length * 3 * len(read.sensors)
+feature_length = read.dct_length * 3 * len(read.imus)
 epochs = 10
-candidates = 5
 k = 3
+candidates = 5
 
 
 def prototype(x, data_samples, no_samples):
@@ -39,7 +38,7 @@ def get_triples_minibatch_indices_me(x, dictionary):
             anchor = x[value]
             others = [f for f in dictionary[k] if f != value]
             positive = prototype(x, others, candidates)
-            negative_labels = np.arange(len(read.activity_list))
+            negative_labels = np.arange(len(read.classes))
             negative_label = random.choice(np.delete(negative_labels, np.argwhere(negative_labels == k)))
             negative = prototype(x, dictionary[negative_label], candidates)
             triples_indices.append([anchor, positive, negative])
@@ -105,15 +104,10 @@ def triplet_loss(inputs, dist='sqeuclidean', margin='maxplus'):
     return K.mean(loss)
 
 
-def build_conv_model(input_shape):
+def build_mlp_model(input_shape):
     base_input = Input(input_shape)
-    x = Conv1D(12, kernel_size=3, activation='relu')(base_input)
-    x = MaxPooling1D(pool_size=2)(x)
-    x = BatchNormalization()(x)
-    x = Flatten()(x)
-    x = Dense(1200, activation='relu')(x)
+    x = Dense(1200, activation='relu')(base_input)
     embedding_model = Model(base_input, x, name='embedding')
-    embedding_model.summary()
 
     anchor_input = Input(input_shape, name='anchor_input')
     positive_input = Input(input_shape, name='positive_input')
@@ -128,7 +122,7 @@ def build_conv_model(input_shape):
 
     triplet_model = Model(inputs, outputs)
     triplet_model.add_loss(K.mean(triplet_loss(outputs)))
-    triplet_model.compile(loss=None, optimizer='adam')  # loss should be None
+    triplet_model.compile(loss=None, optimizer='adam')
 
     return embedding_model, triplet_model
 
@@ -144,20 +138,16 @@ for test_id in test_ids:
 
     _train_data = np.array(_train_data)
     _test_data = np.array(_test_data)
-    _test_data = np.expand_dims(_test_data, 3)
-    _train_data = np.expand_dims(_train_data, 3)
 
-    _embedding_model, _triplet_model = build_conv_model((feature_length,1))
+    _embedding_model, _triplet_model = build_mlp_model((feature_length,))
 
     _triplet_model.fit_generator(triplet_generator_minibatch(_train_data, _train_labels, mini_batch_size),
-                                 steps_per_epoch=steps_per_epoch, epochs=epochs, verbose=0)
+                                 steps_per_epoch=steps_per_epoch, epochs=epochs, verbose=1)
 
     _train_preds = _embedding_model.predict(_train_data)
     _test_preds = _embedding_model.predict(_test_data)
 
-    predictions = []
-
     acc = read.cos_knn(k, _test_preds, _test_labels, _train_preds, _train_labels)
-    result = 'prototype_tn_conv, 3nn,' + str(test_id) + ',' + str(acc)
+    result = 'prototype_tn_mlp, 3nn,' + str(test_id) + ',' + str(acc)
     print(result)
-    read.write_data('tn_conv.csv', result)
+    read.write_data('tn_mlp.csv', result)
