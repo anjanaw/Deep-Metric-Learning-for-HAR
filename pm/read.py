@@ -252,7 +252,9 @@ def extract_features(_data):
 
 def read():
     all_data = _read_()
-    return extract_features(all_data)
+    all_data = extract_features(all_data)
+    all_data = pad_features(all_data)
+    return frame_reduce(all_data)
 
 
 def get_candidates(_data, candidates, samples_per_class):
