@@ -150,16 +150,11 @@ test_ids = list(feature_data.keys())
 all_labels = list(feature_data[test_ids[0]].keys())
 
 for test_id in test_ids:
-    # for a_label in all_labels:
-    for _int in range(5):
-        test_labels_indices = np.random.choice(len(all_labels), num_test_classes, False)
-        test_labels = [a for ii, a in enumerate(all_labels) if ii in test_labels_indices]
-        print(test_labels)
-        train_labels = [a for ii, a in enumerate(all_labels) if ii not in test_labels_indices]
-        print(train_labels)
+    for a_label in all_labels:
+        train_labels = [a for a in all_labels if a != a_label]
         _train_data, _test_data = read.split(feature_data, test_id)
-        _train_data = read.remove_class(_train_data, test_labels)
-        train_data = create_train_instances(_train_data)
+        _train_data = read.remove_class(_train_data, [a_label])
+        _train_data = create_train_instances(_train_data)
 
         _support_data, _test_data = read.support_set_split(_test_data, samples_per_class)
         _support_data, _support_labels = read.flatten(_support_data)
@@ -180,7 +175,7 @@ for test_id in test_ids:
 
         model = Model(inputs=[input1, supportlabels], outputs=knnsimilarity)
         model.compile(optimizer='adam', loss='categorical_crossentropy', metrics=['accuracy'])
-        model.fit([train_data[0], train_data[1]], train_data[2], epochs=epochs, batch_size=batch_size, verbose=1)
+        model.fit([_train_data[0], _train_data[1]], _train_data[2], epochs=epochs, batch_size=batch_size, verbose=1)
 
         _support_preds = base_network.predict(_support_data)
 
@@ -193,5 +188,5 @@ for test_id in test_ids:
             _test_preds = base_network.predict(_test_label_data)
 
             acc = read.cos_knn(k, _test_preds, _test_labels, _support_preds, _support_labels)
-            result = 'mn_conv, 3nn,' + str(test_id) + ',' + ','.join[test_labels] + ',' + str(_l) + ',' + str(acc)
+            result = 'mn_conv, 3nn,' + str(test_id) + ',' + str(a_label) + ',' + str(_l) + ',' + str(acc)
             read.write_data('mn_conv_oe.csv', result)
