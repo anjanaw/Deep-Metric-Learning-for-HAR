@@ -108,21 +108,16 @@ def packslice(data_set):
 
 
 def create_train_instances(train_sets):
-    support_X = None
-    support_y = None
-    target_y = None
+    train_feats = {}
+    for user_id, train_set in train_sets.items():
+            for item in train_set:
+                if item in train_feats:
+                    train_feats[item].extend(train_set[item])
+                else:
+                    train_feats[item] = []
+                    train_feats[item].extend(train_set[item])
 
-    for user_id, train_feats in train_sets.items():
-        _support_X, _support_y, _target_y = packslice(train_feats)
-
-        if support_X is not None:
-            support_X = np.concatenate((support_X, _support_X))
-            support_y = np.concatenate((support_y, _support_y))
-            target_y = np.concatenate((target_y, _target_y))
-        else:
-            support_X = _support_X
-            support_y = _support_y
-            target_y = _target_y
+    support_X, support_y, target_y = packslice(train_feats)
 
     print("Data shapes: ")
     print(support_X.shape)
@@ -146,13 +141,15 @@ feature_data = read.read()
 
 test_ids = list(feature_data.keys())
 for test_id in test_ids:
-    _train_data, _test_data = read.split(feature_data, test_id)
+    print([f for f in feature_data.keys() if f != test_id])
+    _train_data, _test_data = read.split(feature_data, [test_id])
     train_data = create_train_instances(_train_data)
 
     _train_data, _train_labels = read.flatten(_train_data)
     _test_data, _test_labels = read.flatten(_test_data)
     print(len(_train_data))
-    '''_train_data = np.array(_train_data)
+    print(len(train_data[0]))
+    _train_data = np.array(_train_data)
     _test_data = np.array(_test_data)
     _train_data = np.expand_dims(_train_data, 3)
     _test_data = np.expand_dims(_test_data, 3)
@@ -172,13 +169,13 @@ for test_id in test_ids:
 
     model = Model(inputs=[input1, supportlabels], outputs=knnsimilarity)
     model.compile(optimizer='adam', loss='categorical_crossentropy', metrics=['accuracy'])
-    model.fit([train_data[0], train_data[1]], train_data[2], epochs=epochs, batch_size=batch_size, verbose=1)
+    model.fit([train_data[0], train_data[1]], train_data[2], epochs=epochs, batch_size=batch_size, verbose=0)
 
     _train_preds = base_network.predict(_train_data)
     _test_preds = base_network.predict(_test_data)
 
     acc = read.cos_knn(k, _test_preds, _test_labels, _train_preds, _train_labels)
-    result = 'mn_conv, 3nn,' + str(test_id) + ',' + str(acc)
+    result = 'mn_conv_, 3nn,' + str(test_id) + ',' + str(acc)
     print(result)
-    read.write_data('mn_conv_.csv', result)'''
+    read.write_data('mn_conv_.csv', result)
 

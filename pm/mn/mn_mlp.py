@@ -1,20 +1,21 @@
-import keras
 import numpy as np
-import tensorflow as tf
-from keras.layers import Input, Lambda, Dense, Conv1D, MaxPooling1D, Flatten
-from keras.layers.merge import _Merge
+from keras.layers import Input, Lambda, Dense, Conv1D
 from keras.layers.normalization import BatchNormalization
 from keras.models import Model
+import keras
+import tensorflow as tf
+from keras.layers.merge import _Merge
 import read
 
 np.random.seed(1)
 tf.set_random_seed(2)
 
-samples_per_class = 5
+samples_per_class = 1
 classes_per_set = 5
-feature_length = read.dct_length * 3 * len(read.sensors)
-batch_size = 60
+feature_length = read.window_length * read.frames_per_second * read.frame_size
+batch_size = 120
 epochs = 10
+train_size = 500
 k = 3
 
 
@@ -26,9 +27,7 @@ class MatchCosine(_Merge):
         self.n_samp = n_samp
 
     def build(self, input_shape):
-        if not isinstance(input_shape, list) or len(input_shape) != self.nway * self.n_samp + 2:
-            raise ValueError(
-                'A ModelCosine layer should be called on a list of inputs of length %d' % (self.nway * self.n_samp + 2))
+        print('here')
 
     def call(self, inputs):
         self.nway = (len(inputs) - 2) / self.n_samp
@@ -69,40 +68,35 @@ def packslice(data_set):
     support_cacheY = []
     target_cacheY = []
 
-    for _class in data_set:
+    for iiii in range(train_size):
+        slice_x = np.zeros((n_samples + 1, feature_length))
+        slice_y = np.zeros((n_samples,))
 
-        class_data = data_set[_class]
-        class_data = np.array(class_data)
-        class_data = np.expand_dims(class_data, 3)
+        ind = 0
+        pinds = np.random.permutation(n_samples)
+        classes = np.random.choice(list(data_set.keys()), classes_per_set, False)
 
-        for item in class_data:
-            slice_x = np.zeros((n_samples + 1, feature_length, 1))
-            slice_y = np.zeros((n_samples,))
-            pinds = np.random.permutation(n_samples)
+        x_hat_class = np.random.randint(classes_per_set)
 
-            classes = []
-            while _class not in classes:
-                classes = np.random.choice(list(data_set.keys()), classes_per_set, False)
-            ind = 0
+        for j, cur_class in enumerate(classes):
+            data_pack = data_set[cur_class]
+            example_inds = np.random.choice(len(data_pack), samples_per_class, False)
 
-            for j, cur_class in enumerate(classes):
-                data_pack = data_set[cur_class]
-                data_pack = np.array(data_pack)
-                data_pack = np.expand_dims(data_pack, 3)
-                example_inds = np.random.choice(len(data_pack), samples_per_class, False)
+            for eind in example_inds:
+                slice_x[pinds[ind], :] = eind
+                slice_y[pinds[ind]] = j
+                ind += 1
 
-                for eind in example_inds:
-                    slice_x[pinds[ind], :, :] = data_pack[eind]
-                    slice_y[pinds[ind]] = j
-                    ind += 1
+            if j == x_hat_class:
+                target_indx = np.random.choice(len(data_pack))
+                while target_indx in example_inds:
+                    target_indx = np.random.choice(len(data_pack))
+                slice_x[n_samples, :] = data_pack[target_indx]
+                target_y = j
 
-                if _class == cur_class:
-                    slice_x[n_samples, :, :] = item
-                    target_y = j
-
-            support_cacheX.append(slice_x)
-            support_cacheY.append(keras.utils.to_categorical(slice_y, classes_per_set))
-            target_cacheY.append(keras.utils.to_categorical(target_y, classes_per_set))
+        support_cacheX.append(slice_x)
+        support_cacheY.append(keras.utils.to_categorical(slice_y, classes_per_set))
+        target_cacheY.append(keras.utils.to_categorical(target_y, classes_per_set))
 
     return np.array(support_cacheX), np.array(support_cacheY), np.array(target_cacheY)
 
@@ -111,7 +105,6 @@ def create_train_instances(train_sets):
     support_X = None
     support_y = None
     target_y = None
-
     for user_id, train_feats in train_sets.items():
         _support_X, _support_y, _target_y = packslice(train_feats)
 
@@ -131,13 +124,9 @@ def create_train_instances(train_sets):
     return [support_X, support_y, target_y]
 
 
-def conv_embedding():
-    _input = Input(shape=(feature_length,1))
-    x = Conv1D(12, kernel_size=3, activation='relu')(_input)
-    x = MaxPooling1D(pool_size=2)(x)
-    x = BatchNormalization()(x)
-    x = Flatten()(x)
-    x = Dense(1200, activation='relu')(x)
+def mlp_embedding():
+    _input = Input(shape=(feature_length,))
+    x = Dense(1200, activation='relu')(_input)
     x = BatchNormalization()(x)
     return Model(inputs=_input, outputs=x, name='embedding')
 
@@ -151,20 +140,17 @@ for test_id in test_ids:
 
     _train_data, _train_labels = read.flatten(_train_data)
     _test_data, _test_labels = read.flatten(_test_data)
-    print(len(_train_data))
-    '''_train_data = np.array(_train_data)
+    _train_data = np.array(_train_data)
     _test_data = np.array(_test_data)
-    _train_data = np.expand_dims(_train_data, 3)
-    _test_data = np.expand_dims(_test_data, 3)
 
     numsupportset = samples_per_class * classes_per_set
-    input1 = Input((numsupportset + 1, feature_length, 1))
+    input1 = Input((numsupportset + 1, feature_length))
 
     modelinputs = []
-    base_network = conv_embedding()
+    base_network = mlp_embedding()
     for lidx in range(numsupportset):
-        modelinputs.append(base_network(Lambda(lambda x: x[:, lidx, :, :])(input1)))
-    targetembedding = base_network(Lambda(lambda x: x[:, -1, :, :])(input1))
+        modelinputs.append(base_network(Lambda(lambda x: x[:, lidx, :])(input1)))
+    targetembedding = base_network(Lambda(lambda x: x[:, -1, :])(input1))
     modelinputs.append(targetembedding)
     supportlabels = Input((numsupportset, classes_per_set))
     modelinputs.append(supportlabels)
@@ -178,7 +164,7 @@ for test_id in test_ids:
     _test_preds = base_network.predict(_test_data)
 
     acc = read.cos_knn(k, _test_preds, _test_labels, _train_preds, _train_labels)
-    result = 'mn_conv, 3nn,' + str(test_id) + ',' + str(acc)
+    result = 'mn_mlp, 3nn,' + str(test_id) + ',' + str(acc)
     print(result)
-    read.write_data('mn_conv_.csv', result)'''
+    read.write_data('mn_mlp.csv', result)
 

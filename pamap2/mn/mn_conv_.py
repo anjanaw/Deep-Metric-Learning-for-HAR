@@ -12,7 +12,7 @@ tf.set_random_seed(2)
 
 samples_per_class = 5
 classes_per_set = 5
-feature_length = read.dct_length * 3 * len(read.sensors)
+feature_length = read.dct_length * 3 * 3
 batch_size = 60
 epochs = 10
 k = 3
@@ -108,21 +108,15 @@ def packslice(data_set):
 
 
 def create_train_instances(train_sets):
-    support_X = None
-    support_y = None
-    target_y = None
-
+    _feats = None
     for user_id, train_feats in train_sets.items():
-        _support_X, _support_y, _target_y = packslice(train_feats)
-
-        if support_X is not None:
-            support_X = np.concatenate((support_X, _support_X))
-            support_y = np.concatenate((support_y, _support_y))
-            target_y = np.concatenate((target_y, _target_y))
+        if _feats is not None:
+            for item in train_feats:
+                _feats[item].extend(train_feats[item])
         else:
-            support_X = _support_X
-            support_y = _support_y
-            target_y = _target_y
+            _feats = train_feats
+
+    support_X, support_y, target_y = packslice(_feats)
 
     print("Data shapes: ")
     print(support_X.shape)
@@ -152,7 +146,7 @@ for test_id in test_ids:
     _train_data, _train_labels = read.flatten(_train_data)
     _test_data, _test_labels = read.flatten(_test_data)
     print(len(_train_data))
-    '''_train_data = np.array(_train_data)
+    _train_data = np.array(_train_data)
     _test_data = np.array(_test_data)
     _train_data = np.expand_dims(_train_data, 3)
     _test_data = np.expand_dims(_test_data, 3)
@@ -180,5 +174,5 @@ for test_id in test_ids:
     acc = read.cos_knn(k, _test_preds, _test_labels, _train_preds, _train_labels)
     result = 'mn_conv, 3nn,' + str(test_id) + ',' + str(acc)
     print(result)
-    read.write_data('mn_conv_.csv', result)'''
+    read.write_data('mn_conv_.csv', result)
 

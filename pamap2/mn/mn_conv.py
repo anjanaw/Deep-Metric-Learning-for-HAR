@@ -10,12 +10,11 @@ import read
 np.random.seed(1)
 tf.set_random_seed(2)
 
-samples_per_class = 1
+samples_per_class = 5
 classes_per_set = 5
 feature_length = read.dct_length * 3 * 3
 batch_size = 60
 epochs = 10
-train_size = 500
 k = 3
 
 
@@ -70,38 +69,40 @@ def packslice(data_set):
     support_cacheY = []
     target_cacheY = []
 
-    for iiii in range(train_size):
-        slice_x = np.zeros((n_samples + 1, feature_length, 1))
-        slice_y = np.zeros((n_samples,))
+    for _class in data_set:
 
-        ind = 0
-        pinds = np.random.permutation(n_samples)
-        classes = np.random.choice(list(data_set.keys()), classes_per_set, False)
+        class_data = data_set[_class]
+        class_data = np.array(class_data)
+        class_data = np.expand_dims(class_data, 3)
 
-        x_hat_class = np.random.randint(classes_per_set)
+        for item in class_data:
+            slice_x = np.zeros((n_samples + 1, feature_length, 1))
+            slice_y = np.zeros((n_samples,))
+            pinds = np.random.permutation(n_samples)
 
-        for j, cur_class in enumerate(classes):
-            data_pack = data_set[cur_class]
-            data_pack = np.array(data_pack)
-            data_pack = np.expand_dims(data_pack, 3)
+            classes = []
+            while _class not in classes:
+                classes = np.random.choice(list(data_set.keys()), classes_per_set, False)
+            ind = 0
 
-            example_inds = np.random.choice(len(data_pack), samples_per_class, False)
+            for j, cur_class in enumerate(classes):
+                data_pack = data_set[cur_class]
+                data_pack = np.array(data_pack)
+                data_pack = np.expand_dims(data_pack, 3)
+                example_inds = np.random.choice(len(data_pack), samples_per_class, False)
 
-            for eind in example_inds:
-                slice_x[pinds[ind], :, :] = data_pack[eind]
-                slice_y[pinds[ind]] = j
-                ind += 1
+                for eind in example_inds:
+                    slice_x[pinds[ind], :, :] = data_pack[eind]
+                    slice_y[pinds[ind]] = j
+                    ind += 1
 
-            if j == x_hat_class:
-                target_indx = np.random.choice(len(data_pack))
-                while target_indx in example_inds:
-                    target_indx = np.random.choice(len(data_pack))
-                slice_x[n_samples, :, :] = data_pack[target_indx]
-                target_y = j
+                if _class == cur_class:
+                    slice_x[n_samples, :, :] = item
+                    target_y = j
 
-        support_cacheX.append(slice_x)
-        support_cacheY.append(keras.utils.to_categorical(slice_y, classes_per_set))
-        target_cacheY.append(keras.utils.to_categorical(target_y, classes_per_set))
+            support_cacheX.append(slice_x)
+            support_cacheY.append(keras.utils.to_categorical(slice_y, classes_per_set))
+            target_cacheY.append(keras.utils.to_categorical(target_y, classes_per_set))
 
     return np.array(support_cacheX), np.array(support_cacheY), np.array(target_cacheY)
 
@@ -150,6 +151,7 @@ for test_id in test_ids:
 
     _train_data, _train_labels = read.flatten(_train_data)
     _test_data, _test_labels = read.flatten(_test_data)
+    print(len(_train_data))
     _train_data = np.array(_train_data)
     _test_data = np.array(_test_data)
     _train_data = np.expand_dims(_train_data, 3)

@@ -12,6 +12,7 @@ set_random_seed(2)
 
 batch_size = 64
 epochs = 10
+k = 3
 
 feature_length = read.window_length * read.frames_per_second * read.frame_size
 
@@ -66,7 +67,6 @@ for test_id in test_ids:
     print(results)
 
     # knn evaluation
-    k = 3
     acc = read.cos_knn(k, _test_preds, _test_labels, _train_preds, _train_labels)
 
     read.write_data('conv.csv', 'score:'+','.join([str(f) for f in results])+',knn_acc,'+str(acc))

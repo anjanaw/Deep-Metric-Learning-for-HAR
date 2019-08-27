@@ -23,7 +23,6 @@ def mlp():
     _input = Input(shape=(feature_length,))
     x = Dense(1200, activation='relu')(_input)
     x = BatchNormalization()(x)
-    x = Dense(len(read.activity_list), activation='softmax')(x)
     return Model(inputs=_input, outputs=x, name='embedding')
 
 
