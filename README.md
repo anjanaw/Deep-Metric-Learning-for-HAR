@@ -4,9 +4,10 @@ Here we performe a comparative evaluation of Siamese Neural Networks, Triplet Ne
 Publication: "Human activity recognition with deep metric learners" at the 27th International conference on case-based reasoning workshop (ICCBR-WS19), co-located with the 27th International conference on case-based reasoning (ICCBR19)
 
 Citation: 
-<br/>   @inproceedings{martin2020human,
-<br/>   title={Human activity recognition with deep metric learners.},
-<br/>   author={Martin, Kyle and Wijekoon, Anjana and Wiratunga, Nirmalie},
-<br/>   year={2020},
-<br/>   organization={CEUR Workshop Proceedings}
-<br/>   }
+```bib
+@inproceedings{martin2020human,
+title={Human activity recognition with deep metric learners.},
+author={Martin, Kyle and Wijekoon, Anjana and Wiratunga, Nirmalie},
+year={2020},
+organization={CEUR Workshop Proceedings}
+}'''
